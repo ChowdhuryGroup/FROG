@@ -146,9 +146,9 @@ def nice_plot(trace,d_arr,chose_d,f_arr,chose_f,save=False,fignum=1,title='title
 	ax_y.legend()
 	ax_y.set_xlabel('I [cts]')
 	ax_y.set_title('(C)',loc='left')
+	# shouldnt be nessecary since i have a ref to the fig, but is generally important to have save before show because at the end of show, it closes the figure
 	fig.suptitle(figtitle)
-	plt.show();
-	if save:
+		if save:
 		# check to make sure the .png prefix is present
 		if (fname[-4:]!='.png'):
 			fname += '.png'
@@ -156,13 +156,15 @@ def nice_plot(trace,d_arr,chose_d,f_arr,chose_f,save=False,fignum=1,title='title
 			fig.savefig(f,dpi=300)
 		except:
 			raise Exception('error saving picture')
+	plt.show();
 	return
 
-def rough_plot():
+def rough_plot(trace,d_arr,f_arr,chose_d=False,chose_f=False,title='title'):
 	'''
 	creates the same 3 plots as 'nice_plot' but they are all seperate and not fancily formatted
+	also you have the option only just plot the trace and not the other two plots, also it does it in grey scale
 	inputs:
-	TBD
+
 	outputs: no outputs, just makes the plots
 	'''
 	# will pretty much just copy+paste lmao

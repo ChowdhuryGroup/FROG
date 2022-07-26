@@ -243,3 +243,5 @@ def rough_plot(trace,d_arr,f_arr,chose_d=False,chose_f=False,title='title'):
 		plt.ylabel('Intensity [cts]');
 		plt.title('I($\\tau$) '+c_leg+title);
 	return
+
+# want to remove noise then crop/change delay/freq values

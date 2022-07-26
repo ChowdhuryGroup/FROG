@@ -164,8 +164,82 @@ def rough_plot(trace,d_arr,f_arr,chose_d=False,chose_f=False,title='title'):
 	creates the same 3 plots as 'nice_plot' but they are all seperate and not fancily formatted
 	also you have the option only just plot the trace and not the other two plots, also it does it in grey scale
 	inputs:
-
+	trace - array, NxM - a trace array of FROG intensities, I(omega_i,tau_j)
+	d_arr - array, Nx1 - array of delay points [s], of the associated trace
+	chose_d - float or int - the delay value [s] that you wish to see in the I(omega,tau=chose_d) plot
+	NOTE: CURRENTLY WILL NOT work if chose_d is not an element of d_arr, in the future this funct will do its best to get close, if you wish it to be exact ensure before hand
+	f_arr - array, Mx1 - array of freq points [Hz] of the associated trace
+	chose_f - float or int - the freq value [Hz] that you wish to see in the I(omega=chose_f,tau) plot
+	NOTE: if you do not wish to use chose_d and chose_f, might I sugguest you just use the rough plot function instead
+	title - str - any info that will be displayed on all 3 plots after their name (ie trace + title)
 	outputs: no outputs, just makes the plots
 	'''
-	# will pretty much just copy+paste lmao
+	# check the inputs
+	assert(isinstance(trace,np.ndarray)), 'input: trace must be an array'
+	assert(isinstance(d_arr,np.ndarray)), 'input: d_arr must be an array'
+	assert(isinstance(f_arr,np.ndarray)), 'input: f_arr must be an array'
+	assert(trace.shape==(len(d_arr),len(f_arr))), 'shape mismatch btwn trace and arrays'
+	assert(isinstance(chose_d),(float,int,bool)), 'input: chose_d must be a float/int or False'
+	assert(isinstance(chose_f),(float,int,bool)), 'input: chose_f must be a float/int or False'
+	assert(isinstance(title,str)), 'input: title must be a string'
+	# do the plot main plot
+	plt.figure();
+	plt.pcolormesh(f_arr*h2th,d_arr*s2fs,trace,cmap='hot');
+	ax.axvline(chose_f*h2th,c='w',ls='--');
+	ax.axhline(chose_d*s2fs,c='w',ls='--');
+	plt.xlabel('Frequency [THz]');
+	plt.ylabel('Delay [fs]');
+	plt.title('Trace: '+title);
+	# set up all the string stuff and chosen freq/delay stuff
+	# MUST SET UP HOW TO HANDLE THE CHOSEN VALUES IF THEY ARENT IN THEIR ASSOCIATED ARRAYS
+	if (isinstance(chose_d,(float,int)))&(isinstance(chose_f,(float,int))):
+		if ((np.isin(chose_d,d_arr))&(np.isin(chose_f,f_arr))): # if both are my life is easy
+			b_leg = '$\\tau$={d: .1f} fs'.format(d=(chose_d*s2fs)) # names are like that bc of fig labels
+			c_leg = '$\omega$={c:.3f} THz'.format(c=(chose_f*h2th))
+		elif (np.isin(chose_d,d_arr)):
+			b_leg = '$\\tau$={d: .1f} fs'.format(d=(chose_d*s2fs))
+			# bs
+			raise Exception('this is currently not supported, please make chose_f a part of f_arr')
+		elif (np.isin(chose_f,f_arr)):
+			c_leg = '$\omega$={c:.3f} THz'.format(c=(chose_f*h2th))
+			# bs
+			raise Exception('this is currently not supported, please make chose_d a part of d_arr')
+		else:
+			# fucker made my life hard :(
+			raise Exception('this feature is currently not supported, please make both chosen values part of their associated arrays')
+		# then plot
+		plt.figure();
+		plt.plot(f_arr*h2th,trace[np.isin(d_arr,chose_d),:],c='k');
+		plt.xlabel('Frequency [THz]');
+		plt.ylabel('Intensity [cts]');
+		plt.title('I($\omega$) '+b_leg+title)
+		plt.figure();
+		plt.plot(d_arr*s2fs,trace[:,np.isin(f_arr,chose_f)],c='k');
+		plt.xlabel('Delay [fs]');
+		plt.ylabel('Intensity [cts]');
+		plt.title('I($\\tau$) '+c_leg+title);
+	elif (isinstance(chose_d,(float,int)))&(chose_f==False):
+		if (np.isin(chose_d,d_arr)):
+			b_leg = '$\\tau$={d: .1f} fs'.format(d=(chose_d*s2fs))
+		else:
+			# bs
+			raise Exception('this is currently not supported, please make chose_d a part of d_arr')
+		# then plot
+		plt.figure();
+		plt.plot(f_arr*h2th,trace[np.isin(d_arr,chose_d),:],c='k');
+		plt.xlabel('Frequency [THz]');
+		plt.ylabel('Intensity [cts]');
+		plt.title('I($\omega$) '+b_leg+title)
+	elif (isinstance(chose_f,(float,int)))&(chose_d==False):
+		if (np.isin(chose_f,f_arr)):
+			c_leg = '$\omega$={c:.3f} THz'.format(c=(chose_f*h2th))
+		else:
+			# bs
+			raise Exception('this is currently not supported, please make chose_d a part of d_arr')
+		# then plot
+		plt.figure();
+		plt.plot(d_arr*s2fs,trace[:,np.isin(f_arr,chose_f)],c='k');
+		plt.xlabel('Delay [fs]');
+		plt.ylabel('Intensity [cts]');
+		plt.title('I($\\tau$) '+c_leg+title);
 	return

@@ -73,7 +73,7 @@ def read_trace(folder,fname,calibration):
 	return (raw_pic,trc_d,trc_w,trc_f)
 
 # will want to use this to for the plot functions
-def find_int(arr,val):
+def find_ind(arr,val):
 	'''
 	finds the index of arr that matches closest to val, useful for finding matching values in d_arr and f_arr in other functions
 	NOTE: values in arrays will be in base SI units (m, s, Hz, etc) you must put in those values
@@ -95,6 +95,7 @@ def find_int(arr,val):
 	return ind
 
 # function to call to plot the diff plots, that can be called in other functions
+# HAVE find_ind FUNCT IMPLEMENT!!
 def nice_plot(trace,d_arr,chose_d,f_arr,chose_f,save=False,fignum=1,title='title',fname='test.png'):
 	'''
 	creates a nice figure of the FROG trace, I_frog(omega,tau), with plots above and to the right of that that are just I(omega) and I(tau)
@@ -181,6 +182,7 @@ def nice_plot(trace,d_arr,chose_d,f_arr,chose_f,save=False,fignum=1,title='title
 	plt.show();
 	return
 
+# HAVE find_ind FUNCT IMPLEMENT!!
 def rough_plot(trace,d_arr,f_arr,chose_d=False,chose_f=False,title='title'):
 	'''
 	creates the same 3 plots as 'nice_plot' but they are all seperate and not fancily formatted
@@ -189,6 +191,7 @@ def rough_plot(trace,d_arr,f_arr,chose_d=False,chose_f=False,title='title'):
 	trace - array, int, NxM - a trace array of FROG intensities, I(omega_i,tau_j)
 	d_arr - array, float, Nx1 - array of delay points [s], of the associated trace
 	chose_d - float or int - the delay value [s] that you wish to see in the I(omega,tau=chose_d) plot
+	NOTE: can leave as false if you dont want to see this plot, same for chose_f
 	NOTE: CURRENTLY WILL NOT work if chose_d is not an element of d_arr, in the future this funct will do its best to get close, if you wish it to be exact ensure before hand
 	f_arr - array, float, Mx1 - array of freq points [Hz] of the associated trace
 	chose_f - float or int - the freq value [Hz] that you wish to see in the I(omega=chose_f,tau) plot
@@ -271,7 +274,7 @@ def rough_plot(trace,d_arr,f_arr,chose_d=False,chose_f=False,title='title'):
 # https://towardsdatascience.com/image-filters-in-python-26ee938e57d2#:~:text=1.-,Mean%20Filter,the%20edges%20of%20the%20image.
 # ^ want to look here for more filtering ideas
 # but for starters: median filtering
-def get_med(trace,d_arr,f_arr,bnd_val):
+def get_avg(trace,d_arr,f_arr,bnd_val):
 	'''
 	finds the median of data remaining in trace once the signal has been taken out, for the purpose of noise removal
 	within its own funct in order to be as memory efficent as possible
@@ -280,7 +283,7 @@ def get_med(trace,d_arr,f_arr,bnd_val):
 	d_arr - array, float, Nx1 - array of delay points [s], of the associated trace
 	f_arr - array, float, Mx1 - array of freq points [Hz], of the associated trace
 	bnd_val - tuple, float - tuple containing the 4 values,  ([s],[s],[Hz],[Hz]), low then high, that enclose the signal in the frog trace
-	NOTE: values within bnd_val do NOT need to be actual values within d_arr and f_arr, HOWEVER, this funct uses find_int funct, so must follow those rules
+	NOTE: values within bnd_val do NOT need to be actual values within d_arr and f_arr, HOWEVER, this funct uses find_ind funct, so must follow those rules
 	'''
 	# assertions
 	assert(isinstance(trace,np.ndarray)), 'input: trace must be an array'
@@ -290,8 +293,8 @@ def get_med(trace,d_arr,f_arr,bnd_val):
 	assert(isinstance(bnd_val,tuple)), 'input: bnd_val must be a tuple'
 	assert(len(bnd_val)==4), 'size error for bnd_val'
 	# do index array for each guy
-	bnd_ind_d = np.array([find_int(trc_d,bnd_val[0]),find_int(trc_d,bnd_val[1])])
-	bnd_ind_f = np.array([find_int(trc_f,bnd_val[2]),find_int(trc_f,bnd_val[3])]) # indices of interest
+	bnd_ind_d = np.array([find_ind(d_arr,bnd_val[0]),find_ind(d_arr,bnd_val[1])])
+	bnd_ind_f = np.array([find_ind(f_arr,bnd_val[2]),find_ind(f_arr,bnd_val[3])]) # indices of interest
 	# do an if to ensure that both guys are in order
 	if (bnd_ind_d[0]>bnd_ind_d[1]):
 		bnd_ind_d = bnd_ind_d[::-1]
@@ -299,21 +302,21 @@ def get_med(trace,d_arr,f_arr,bnd_val):
 		bnd_ind_f = bnd_ind_f[::-1]
 	# fun fact, python passes objects into the functions so if you pass in a mutable object defined globally into the function and modify it, (as long as its not a redefinition)
 	# it will be keep that change, however this only works for mutable objects :(
-	zone_med = np.zeros(4,dtype=int)
-	zone_med[:2] = np.array([np.median(np.hsplit(raw_pic,bnd_ind_f)[::2][i]) for i in range(2)],dtype=int)
-	zone_med[2:] = np.array([np.median(np.vsplit(raw_pic,bnd_ind_d)[::2][i]) for i in range(2)],dtype=int)
+	zone_avg = np.zeros(4,dtype=int)
+	zone_avg[:2] = np.array([np.mean(np.hsplit(trace,bnd_ind_f)[::2][i]) for i in range(2)],dtype=int)
+	zone_avg[2:] = np.array([np.mean(np.vsplit(trace,bnd_ind_d)[::2][i]) for i in range(2)],dtype=int)
 	# np.splits returns a view of a list of arrays so thats why the wacky indexing and list comprehension are required
 	# also this only works for removing a block but np.split will be useful for the boxcar avg
-	med = int(np.median(zone_med))
-	return med
+	avg = int(np.mean(zone_med))
+	return avg
 
 # put it all together
-def med_filter(trace,d_arr,f_arr,bnd_val,trace_type=np.ushort,copy=True):
+def avg_filter(trace,d_arr,f_arr,bnd_val,trace_type=np.ushort,copy=True):
 	'''
-	function that applies a median filter to trace to remove noise and returns a new filtered trace
+	function that applies a mean filter to trace to remove noise and returns a new filtered trace
 	NOTE: ill say it here and below, the dtype of trace may be an unsigned integer, this handles that but please read dtype documentation, see below
 	https://numpy.org/doc/stable/reference/arrays.scalars.html#numpy.uintc
-	NOTE: uses get_med and find_int functs within, read documentation if errors occur within said functs
+	NOTE: uses get_med and find_ind functs within, read documentation if errors occur within said functs
 	input:
 	trace - array, int, NxM - a trace array of FROG intensities, I(omega_i,tau_j)
 	NOTE: currently (7/27/22) i have only seen trace use unsigned 16-bit int (uint16), this funct handles the potential overflow error
@@ -321,7 +324,7 @@ def med_filter(trace,d_arr,f_arr,bnd_val,trace_type=np.ushort,copy=True):
 	d_arr - array, float, Nx1 - array of delay points [s], of the associated trace
 	f_arr - array, float, Mx1 - array of freq points [Hz], of the associated trace
 	bnd_val - tuple, float - tuple containing the 4 values,  ([s],[s],[Hz],[Hz]), low then high, that enclose the signal in the frog trace
-	NOTE: values within bnd_val do NOT need to be actual values within d_arr and f_arr, HOWEVER, this funct uses find_int funct, so must follow those rules
+	NOTE: values within bnd_val do NOT need to be actual values within d_arr and f_arr, HOWEVER, this funct uses find_ind funct, so must follow those rules
 	trace_type - numpy scalar class -  default uint16 aka np.ushort, the kind of integers trace will be output with, should be what trace has as well
 	NOTE: MUST use numpy scalar class names, ie np.ushort, see documentation above for types
 	NOTE: currently (7/27/22) only unsigned integers are supported, i dont know how this would even work with signed integers so availiblity is tbd
@@ -335,7 +338,7 @@ def med_filter(trace,d_arr,f_arr,bnd_val,trace_type=np.ushort,copy=True):
 	assert(isinstance(trace[1,1],trace_type)), 'dtype mismatch btwn trace elements and trace_type'
 	assert(np.issubdtype(trace_type,np.unsignedinteger)), 'output trace must be unsigned integer'
 	assert(isinstance(copy,bool)), 'input: copy must be a bool'
-	med = get_med(trace,d_arr,f_arr,bnd_val)
+	avg = get_avg(trace,d_arr,f_arr,bnd_val)
 	# if statement should handle if trace is unsigned or not
 	if copy:
 		# type chnage is for unsigned ints overflow
@@ -352,3 +355,53 @@ def med_filter(trace,d_arr,f_arr,bnd_val,trace_type=np.ushort,copy=True):
 		assert(np.all(trace>=0))
 		trace = trace.astype(trace_type,copy=False)
 		return trace # not 100% sure i need this return but oh well
+
+# want crop and point adjustment as sep funct both with plot at the end so that we can see effects seperately
+def crop_trace(trace,d_arr,f_arr,crp_val,plot=False,chose_f=False,chose_d=False):
+	'''
+	function to take in a trace, its assoc arrays, and crop parameters and return a new cropped trace and arrays and optionally plot the crop
+	the optional plotting just uses rough plot, you can do all 3 plots but not choose a title
+	the output trace/arrays are just sections of the original trace/arrays, funct DOESNT change the points, that is a seperate function
+	inputs:
+	trace - array, int, NxM - a trace array of FROG intensities, I(omega_i,tau_j)
+	d_arr - array, float, Nx1 - array of delay points [s], of the associated trace
+	f_arr - array, float, Mx1 - array of freq points [Hz], of the associated trace
+	crp_val - tuple, floats - tuple containing the 4 values,  ([s],[s],[Hz],[Hz]), that enclose the signal and become the edges of the new trace
+	NOTE: crp_val must have that order of units (delay, delay, freq, freq) or will throw error
+	plot - bool - default False, change to True if you wish to call rough_plot
+	NOTE: see documentation for rough_plot, also defaults to only ploting the trace
+	chose_d - float or int - the delay value [s] that you wish to see in the I(omega,tau=chose_d) plot
+	chose_f - float or int - the freq value [Hz] that you wish to see in the I(omega=chose_f,tau) plot
+	outputs: returns a tuple in the order below
+	c_trace - array, int, AxB - cropped trace of FROG intensities, issa new object, original trace should be unaffected
+	cd_arr - array, float, Ax1 - cropped array of delay points [s] for the new trace
+	cf_arr - array, float, Bx1 - cropped array of freq points [Hz] for the new trace
+	'''
+	# input assertions
+	assert(isinstance(trace,np.ndarray)), 'input: trace must be an array'
+	assert(isinstance(d_arr,np.ndarray)), 'input: d_arr must be an array'
+	assert(isinstance(f_arr,np.ndarray)), 'input: f_arr must be an array'
+	assert(trace.shape==(len(d_arr),len(f_arr))), 'shape mismatch btwn trace and arrays'
+	assert(isinstance(crp_val,tuple)), 'input: crp_val must be a tuple'
+	assert(len(crp_val)==4), 'size error for crp_val'
+	assert(isinstance(plot,bool)), 'input: plot must be a bool'
+	# use find_ind 
+	crp_ind_d = np.array([find_ind(d_arr,crp_val[i]) for i in range(2)])
+	crp_ind_f = np.array([find_ind(f_arr,crp_val[i+2]) for i in range(2)])
+	# do an if to ensure that both guys are in order
+	if (bnd_ind_d[0]>bnd_ind_d[1]):
+		bnd_ind_d = bnd_ind_d[::-1]
+	if (bnd_ind_f[0]>bnd_ind_f[1]):
+		bnd_ind_f = bnd_ind_f[::-1]
+	# preallocate arrays
+	cd_arr = np.zeros(np.diff(crp_ind_d))
+	cf_arr = np.zeros(np.diff(crp_ind_f))
+	c_trace = np.zeros((len(cd_arr),len(cf_arr)))
+	# stuff em with vals
+	cd_arr = d_arr[crp_ind_d[0]:crp_ind_d[1]]
+	cf_arr = f_arr[crp_ind_f[0]:crp_ind_f[1]]
+	c_trace = trace[crp_ind_d[0]:crp_ind_d[1],crp_ind_f[0]:crp_ind_f[1]]
+	# handle plotting
+	if plot:
+		rough_plot(c_trace,cd_arr,cf_arr,chose_d,chose_f)
+	return c_trace,cd_arr,cf_arr

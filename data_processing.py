@@ -11,7 +11,6 @@ mpl.rc('xtick', direction='in', top=True)
 mpl.rc('ytick', direction='in', right=True)
 mpl.rc('xtick.minor', visible=True)
 mpl.rc('ytick.minor', visible=True)
-%matplotlib inline
 
 # constants
 c = 2.99e8 # speed of light in vac [m/s]
@@ -51,11 +50,8 @@ def read_trace(folder,fname,calibration):
 	wpp = float(calibration['wavelength per pixel']) # [m/pix]
 	# load in picture
 	fp = folder+fname
-	try:
-		with open(fp,'r',) as f:
-			raw_pic = cv.imread(f,cv.IMREAD_UNCHANGED)
-	except:
-		raise Exception('error reading picture')
+	with open(fp,'r') as f:
+		raw_pic = cv.imread(fp,cv.IMREAD_UNCHANGED)
 	# create trace arrays, dim dont matter until we have to crop and such
 	# delay is vert, wvl is horz, pic dim is vert pix x horz pix
 	# create trace delay array [s]
@@ -65,10 +61,10 @@ def read_trace(folder,fname,calibration):
 	rigthw = cali_wvl + (raw_pic.shape[1] - cali_pix)*wpp
 	# those are the endpoints for the array, assert that this will generate something real (>0)
 	assert(leftw>0.), 'error in calibration data, FROG did not measure negative wavelengths'
-	trc_w = np.linspace(leftw,rightw,raw_pic.shape[1])
+	trc_w = np.linspace(leftw,rigthw,raw_pic.shape[1])
 	# create trace freq array [Hz], using freq b/c python does
 	# NOTE: converting spectral phase/pwr (spectrum) from wvl to freq is in Trebino pg 15
-	trc_f = c/trc_w
+	trc_f = c/trc_w[::-1] # [Hz], but will now be in asc order
 	# NOTE: if you do this ^, trc_f wont be evenly spaced it will just be an accurate rep of what freqs were measured
 	return (raw_pic,trc_d,trc_w,trc_f)
 
@@ -91,7 +87,15 @@ def find_ind(arr,val):
 	assert(within), 'val is not within range of arr, either fix val, or ensure arr is ordered'
 	dx = arr[1] - arr[0]
 	dist = val - arr[0]
-	ind = int(dist//dx)
+	if np.all(np.isclose(dx,np.diff(arr))):
+		ind = int(dist//dx)
+	else:
+		test = arr - val # should cross 0 somewhere, will use this
+		a = len(arr) - arr[test>0.].shape[0]
+		if (np.abs(val - arr[a])<np.abs(val - arr[a-1])):
+			ind = a
+		else:
+			ind = a-1
 	return ind
 
 # function to call to plot the diff plots, that can be called in other functions
@@ -105,10 +109,10 @@ def nice_plot(trace,d_arr,chose_d,f_arr,chose_f,save=False,fignum=1,title='title
 	inputs:
 	trace - array, int, NxM - a trace array of FROG intensities, I(omega_i,tau_j)
 	d_arr - array, float, Nx1 - array of delay points [s], of the associated trace
-	chose_d - float or int - the delay value [s] that you wish to see in the I(omega,tau=chose_d) plot
+	chose_d - float - the delay value [s] that you wish to see in the I(omega,tau=chose_d) plot
 	NOTE: CURRENTLY WILL NOT work if chose_d is not an element of d_arr, in the future this funct will do its best to get close, if you wish it to be exact ensure before hand
 	f_arr - array, float Mx1 - array of freq points [Hz] of the associated trace
-	chose_f - float or int - the freq value [Hz] that you wish to see in the I(omega=chose_f,tau) plot
+	chose_f - float - the freq value [Hz] that you wish to see in the I(omega=chose_f,tau) plot
 	NOTE: if you do not wish to use chose_d and chose_f, might I sugguest you just use the rough plot function instead
 	save - bool - would you like to save this figure? default to False
 	fignum - float or int - the overall figure number, in case youd like to use this for publications/presentations, default is 1
@@ -122,8 +126,8 @@ def nice_plot(trace,d_arr,chose_d,f_arr,chose_f,save=False,fignum=1,title='title
 	assert(isinstance(d_arr,np.ndarray)), 'input: d_arr must be an array'
 	assert(isinstance(f_arr,np.ndarray)), 'input: f_arr must be an array'
 	assert(trace.shape==(len(d_arr),len(f_arr))), 'shape mismatch btwn trace and arrays'
-	assert(isinstance(chose_d),(float,int)), 'input: chose_d must be a float or int'
-	assert(isinstance(chose_f),(float,int)), 'input: chose_f must be a float or int'
+	assert(isinstance(chose_d,(float))), 'input: chose_d must be a float or int'
+	assert(isinstance(chose_f,(float))), 'input: chose_f must be a float or int'
 	assert(isinstance(fignum,(float,int))), 'input: fignum must be a float or int'
 	assert(isinstance(title,str)), 'input: title must be a string'
 	assert(isinstance(fname,str)), 'input: fname must be a string'
@@ -171,12 +175,13 @@ def nice_plot(trace,d_arr,chose_d,f_arr,chose_f,save=False,fignum=1,title='title
 	ax_y.set_title('(C)',loc='left')
 	# shouldnt be nessecary since i have a ref to the fig, but is generally important to have save before show because at the end of show, it closes the figure
 	fig.suptitle(figtitle)
-		if save:
+	if save:
 		# check to make sure the .png prefix is present
 		if (fname[-4:]!='.png'):
 			fname += '.png'
-		with open(fname,'w') as f:
-			fig.savefig(f,dpi=300)
+		try:
+			with open(fname,'w') as f:
+				fig.savefig(f,dpi=300)
 		except:
 			raise Exception('error saving picture')
 	plt.show();
@@ -204,20 +209,25 @@ def rough_plot(trace,d_arr,f_arr,chose_d=False,chose_f=False,title='title'):
 	assert(isinstance(d_arr,np.ndarray)), 'input: d_arr must be an array'
 	assert(isinstance(f_arr,np.ndarray)), 'input: f_arr must be an array'
 	assert(trace.shape==(len(d_arr),len(f_arr))), 'shape mismatch btwn trace and arrays'
-	assert(isinstance(chose_d),(float,int,bool)), 'input: chose_d must be a float/int or False'
-	assert(isinstance(chose_f),(float,int,bool)), 'input: chose_f must be a float/int or False'
+	assert(isinstance(chose_d,(float,bool))), 'input: chose_d must be a float/int or False'
+	assert(isinstance(chose_f,(float,bool))), 'input: chose_f must be a float/int or False'
 	assert(isinstance(title,str)), 'input: title must be a string'
 	# do the plot main plot
 	plt.figure();
 	plt.pcolormesh(f_arr*h2th,d_arr*s2fs,trace,cmap='hot');
-	ax.axvline(chose_f*h2th,c='w',ls='--');
-	ax.axhline(chose_d*s2fs,c='w',ls='--');
+	if (isinstance(chose_d,float))&(isinstance(chose_f,float)):
+		plt.axvline(chose_f*h2th,c='w',ls='--');
+		plt.axhline(chose_d*s2fs,c='w',ls='--');
+	elif (isinstance(chose_d,float))&(chose_f==False):
+		plt.axhline(chose_d*s2fs,c='w',ls='--');
+	elif (isinstance(chose_f,float))&(chose_d==False):
+		plt.axvline(chose_f*h2th,c='w',ls='--');
 	plt.xlabel('Frequency [THz]');
 	plt.ylabel('Delay [fs]');
 	plt.title('Trace: '+title);
 	# set up all the string stuff and chosen freq/delay stuff
 	# MUST SET UP HOW TO HANDLE THE CHOSEN VALUES IF THEY ARENT IN THEIR ASSOCIATED ARRAYS
-	if (isinstance(chose_d,(float,int)))&(isinstance(chose_f,(float,int))):
+	if (isinstance(chose_d,(float)))&(isinstance(chose_f,(float))):
 		if ((np.isin(chose_d,d_arr))&(np.isin(chose_f,f_arr))): # if both are my life is easy
 			b_leg = '$\\tau$={d: .1f} fs'.format(d=(chose_d*s2fs)) # names are like that bc of fig labels
 			c_leg = '$\omega$={c:.3f} THz'.format(c=(chose_f*h2th))
@@ -243,7 +253,7 @@ def rough_plot(trace,d_arr,f_arr,chose_d=False,chose_f=False,title='title'):
 		plt.xlabel('Delay [fs]');
 		plt.ylabel('Intensity [cts]');
 		plt.title('I($\\tau$) '+c_leg+title);
-	elif (isinstance(chose_d,(float,int)))&(chose_f==False):
+	elif (isinstance(chose_d,(float)))&(chose_f==False):
 		if (np.isin(chose_d,d_arr)):
 			b_leg = '$\\tau$={d: .1f} fs'.format(d=(chose_d*s2fs))
 		else:
@@ -255,7 +265,7 @@ def rough_plot(trace,d_arr,f_arr,chose_d=False,chose_f=False,title='title'):
 		plt.xlabel('Frequency [THz]');
 		plt.ylabel('Intensity [cts]');
 		plt.title('I($\omega$) '+b_leg+title)
-	elif (isinstance(chose_f,(float,int)))&(chose_d==False):
+	elif (isinstance(chose_f,(float)))&(chose_d==False):
 		if (np.isin(chose_f,f_arr)):
 			c_leg = '$\omega$={c:.3f} THz'.format(c=(chose_f*h2th))
 		else:
@@ -307,13 +317,14 @@ def get_avg(trace,d_arr,f_arr,bnd_val):
 	zone_avg[2:] = np.array([np.mean(np.vsplit(trace,bnd_ind_d)[::2][i]) for i in range(2)],dtype=int)
 	# np.splits returns a view of a list of arrays so thats why the wacky indexing and list comprehension are required
 	# also this only works for removing a block but np.split will be useful for the boxcar avg
-	avg = int(np.mean(zone_med))
+	avg = int(np.mean(zone_avg))
 	return avg
 
 # put it all together
-def avg_filter(trace,d_arr,f_arr,bnd_val,trace_type=np.ushort,copy=True):
+def avg_removal(trace,d_arr,f_arr,bnd_val,trace_type=np.ushort,copy=True):
 	'''
-	function that applies a mean filter to trace to remove noise and returns a new filtered trace
+	function that finds the mean of what should be signalless places of the trace and subtracting it from the whole trace to remove noise and returns a new filtered trace
+	THIS IS NOT MEAN FILTERING, that is something that would distort the signal and is bad for FROG
 	NOTE: ill say it here and below, the dtype of trace may be an unsigned integer, this handles that but please read dtype documentation, see below
 	https://numpy.org/doc/stable/reference/arrays.scalars.html#numpy.uintc
 	NOTE: uses get_med and find_ind functs within, read documentation if errors occur within said functs
@@ -343,21 +354,21 @@ def avg_filter(trace,d_arr,f_arr,bnd_val,trace_type=np.ushort,copy=True):
 	if copy:
 		# type chnage is for unsigned ints overflow
 		filtered_trace = trace.astype(float)
-		filtered_trace -= med
+		filtered_trace -= avg
 		filtered_trace[filtered_trace<0.] = 0.
 		assert(np.all(filtered_trace>=0)) # ensure all values are >=0 before returning to int dtype
 		filtered_trace = filtered_trace.astype(trace_type,copy=False) # no need for another copy ya know
 		return filtered_trace
 	else:
 		trace = trace.astype(float,copy=False) # this will change the input trace, make ur peace with that
-		trace -= med
+		trace -= avg
 		trace[trace<0.] = 0.
 		assert(np.all(trace>=0))
 		trace = trace.astype(trace_type,copy=False)
 		return trace # not 100% sure i need this return but oh well
 
 # want crop and point adjustment as sep funct both with plot at the end so that we can see effects seperately
-def crop_trace(trace,d_arr,f_arr,crp_val,plot=False,chose_f=False,chose_d=False):
+def man_crop(trace,d_arr,f_arr,crp_val,plot=False,chose_f=False,chose_d=False):
 	'''
 	function to take in a trace, its assoc arrays, and crop parameters and return a new cropped trace and arrays and optionally plot the crop
 	the optional plotting just uses rough plot, you can do all 3 plots but not choose a title
@@ -389,10 +400,10 @@ def crop_trace(trace,d_arr,f_arr,crp_val,plot=False,chose_f=False,chose_d=False)
 	crp_ind_d = np.array([find_ind(d_arr,crp_val[i]) for i in range(2)])
 	crp_ind_f = np.array([find_ind(f_arr,crp_val[i+2]) for i in range(2)])
 	# do an if to ensure that both guys are in order
-	if (bnd_ind_d[0]>bnd_ind_d[1]):
-		bnd_ind_d = bnd_ind_d[::-1]
-	if (bnd_ind_f[0]>bnd_ind_f[1]):
-		bnd_ind_f = bnd_ind_f[::-1]
+	if (crp_ind_d[0]>crp_ind_d[1]):
+		crp_ind_d = crp_ind_d[::-1]
+	if (crp_ind_f[0]>crp_ind_f[1]):
+		crp_ind_f = crp_ind_f[::-1]
 	# preallocate arrays
 	cd_arr = np.zeros(np.diff(crp_ind_d))
 	cf_arr = np.zeros(np.diff(crp_ind_f))
@@ -405,3 +416,8 @@ def crop_trace(trace,d_arr,f_arr,crp_val,plot=False,chose_f=False,chose_d=False)
 	if plot:
 		rough_plot(c_trace,cd_arr,cf_arr,chose_d,chose_f)
 	return c_trace,cd_arr,cf_arr
+
+# As a practical criterion, we'll consider FROG trace data to be properly sampled when 
+# the intensity of the data points at the perimeter of the FROG trace grid are <=10^-4 the peak of the trace
+# want a program that can do that 
+# also want to do one that can worry about sampling but that is a future prob

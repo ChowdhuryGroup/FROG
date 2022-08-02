@@ -4,6 +4,7 @@
 # packages/boilerplate
 import numpy as np 
 import cv2 as cv
+import scipy.interpolate as intp
 import matplotlib.pyplot as plt
 import matplotlib.image as img
 import matplotlib as mpl
@@ -165,7 +166,7 @@ def nice_plot(trace,d_arr,chose_d,f_arr,chose_f,save=False,fignum=1,title='title
 	ax.set_ylabel('Delay [fs]')
 	ax.set_title('(A)',loc='left')
 	ax.set_title('$I_{FROG}(\omega_i,\\tau_j)$')
-	ax_x.plot(f_arr*h2th,trace[np.isin(d_arr,chose_d),:],c='k',label=b_leg)
+	ax_x.plot(f_arr*h2th,trace[np.isin(d_arr,chose_d),:].T,c='k',label=b_leg)
 	ax_x.legend()
 	ax_x.set_ylabel('I [cts]')
 	ax_x.set_title('(B)',loc='left')
@@ -282,7 +283,9 @@ def rough_plot(trace,d_arr,f_arr,chose_d=False,chose_f=False,title='title'):
 # want to remove noise then crop/change delay/freq values
 # will add more filtering algorithms as time goes on
 # https://towardsdatascience.com/image-filters-in-python-26ee938e57d2#:~:text=1.-,Mean%20Filter,the%20edges%20of%20the%20image.
-# ^ want to look here for more filtering ideas
+# ^ dont actually do median filtering, even if you remove signal from filtering
+# really only need diff filtering methods if getting higher noise, and will use Trebinos ideas
+
 # but for starters: median filtering
 def get_avg(trace,d_arr,f_arr,bnd_val):
 	'''
@@ -421,3 +424,75 @@ def man_crop(trace,d_arr,f_arr,crp_val,plot=False,chose_f=False,chose_d=False):
 # the intensity of the data points at the perimeter of the FROG trace grid are <=10^-4 the peak of the trace
 # want a program that can do that 
 # also want to do one that can worry about sampling but that is a future prob
+
+# need sampling, std practice is about 256x256 with equal spacing 
+def sr_FWHM(trace,d_arr,f_arr,pic_dim=256,diag=False):
+	'''
+	takes in trace and assoc. arrays, and returns equal temp/freq sampling rate 
+	uses Trebino's book pg 216 eqn. 10.8, see chap 10 for sampling and chap 2 for pulse width
+	as funct name states, it uses FWHM to obtain these values
+	NOTE: if you have a pulse with lots of lobes/wings, FWHM is NOT the pulse width quantity to use
+	will be used within another funct to actually create sampled arrays
+	inputs:
+	trace - array, int, NxM - a trace array of FROG intensities, I(omega_i,tau_j)
+	d_arr - array, float, Nx1 - array of delay points [s], of the associated trace
+	f_arr - array, float, Mx1 - array of freq points [Hz], of the associated trace
+	pic_dim - int - the dimensions of the new trace you would like, will be NxN
+	diag - bool - default False, but if True, prints useful values like temp/spec FWHM and resultant spacing
+	outputs: tuple, in order below
+	dt - float - temporal spacing [s] to be used in FROG trace
+	df - float - spectral spacing [Hz] to be used in FROG trace
+	M - float - parameter used to determine spacing
+	'''
+	# assertions
+	assert(isinstance(trace,np.ndarray)), 'input: trace must be an array'
+	assert(isinstance(d_arr,np.ndarray)), 'input: d_arr must be an array'
+	assert(isinstance(f_arr,np.ndarray)), 'input: f_arr must be an array'
+	assert(trace.shape==(len(d_arr),len(f_arr))), 'shape mismatch btwn trace and arrays'
+	assert(isinstance(pic_dim,int)), 'input: pic_dim must be an integer'
+	assert(isinstance(diag,bool)), 'input: diag must be a boolean'
+	# index with max value
+	t_max_ind = np.max(trace,axis=1).argmax()
+	f_max_ind = np.max(trace,axis=0).argmax()
+	# create I(omega) and I(tau) arrays
+	t_curve = trace[:,f_max_ind]
+	f_curve = trace[t_max_ind,:]
+	if diag:
+		print('max along t_curve:',s2fs*d_arr[t_max_ind])
+		print('max along f_curve:',h2th*f_arr[f_max_ind])
+	# find half max for both sides, using splines because itll be easier
+	t_spl = intp.InterpolatedUnivariateSpline(d_arr,(t_curve.astype(float)-(np.max(t_curve.astype(float))/2.)))
+	f_spl = intp.InterpolatedUnivariateSpline(f_arr,(f_curve.astype(float)-(np.max(f_curve.astype(float))/2.)))
+	t_ind = np.array([find_ind(d_arr,t_spl.roots()[i]) for i in range(len(t_spl.roots()))])
+	f_ind = np.array([find_ind(f_arr,f_spl.roots()[i]) for i in range(len(f_spl.roots()))])
+	# avg if there is more than 1 on ea side
+	# this is gonna be weird if there are tall lobes, wouldnt recommend using 
+	if diag:
+		print('time indices: ',t_ind,' time vals: ',s2fs*d_arr[t_ind])
+		print('freq indices: ',f_ind,' freq vals: ',h2th*f_arr[f_ind])
+	if (len(t_ind)>2):
+		lt = np.mean(d_arr[t_ind[t_ind<t_max_ind]])
+		rt = np.mean(d_arr[t_ind[t_ind>t_max_ind]])
+	else:
+		lt = d_arr[t_ind.min()]
+		rt = d_arr[t_ind.max()]
+	if (len(f_ind)>2):
+		lf = np.mean(f_arr[f_ind[f_ind<f_max_ind]])
+		rf = np.mean(f_arr[f_ind[f_ind>f_max_ind]])
+	else:
+		lf = f_arr[f_ind.min()]
+		rf = f_arr[f_ind.max()]
+	# create Dt,Df,M,dt,df
+	Dt = np.abs(rt-lt) # temporal FWHM [s]
+	Df = np.abs(rf-lf) # spectral FWHM [Hz]
+	M = np.sqrt(Dt*pic_dim*Df) # factor Trebino uses for equal spacing btwn temp/spec pnts in FROG
+	if diag:
+		print('Dt = ',Dt*s2fs,'Df = ',Df*h2th)
+	dt = Dt/M
+	df = 1./(pic_dim*dt)
+	if diag:
+		print('M = ',M,'dt = ',dt*s2fs,'df = ',df*h2th)
+	return (dt,df,M)
+
+# need to test both padding during sampling and padding during FROG
+# either way both will use sr_FWHM for now

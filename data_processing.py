@@ -1,5 +1,6 @@
 # Image processing programs for SHG FROG data
 # By Adam Fisher, est 7/11/22
+# NOTE: whne refering to Trebino's book I mean: Frequency-Resolved Optical Grating (2000)
 
 # packages/boilerplate
 import numpy as np 
@@ -426,7 +427,7 @@ def man_crop(trace,d_arr,f_arr,crp_val,plot=False,chose_f=False,chose_d=False):
 # also want to do one that can worry about sampling but that is a future prob
 
 # need sampling, std practice is about 256x256 with equal spacing 
-def sr_FWHM(trace,d_arr,f_arr,pic_dim=256,diag=False):
+def sr_FWHM(trace,d_arr,f_arr,pic_dim,diag=False):
 	'''
 	takes in trace and assoc. arrays, and returns equal temp/freq sampling rate 
 	uses Trebino's book pg 216 eqn. 10.8, see chap 10 for sampling and chap 2 for pulse width
@@ -435,6 +436,7 @@ def sr_FWHM(trace,d_arr,f_arr,pic_dim=256,diag=False):
 	will be used within another funct to actually create sampled arrays
 	inputs:
 	trace - array, int, NxM - a trace array of FROG intensities, I(omega_i,tau_j)
+	NOTE: trace should already have its background removed
 	d_arr - array, float, Nx1 - array of delay points [s], of the associated trace
 	f_arr - array, float, Mx1 - array of freq points [Hz], of the associated trace
 	pic_dim - int - the dimensions of the new trace you would like, will be NxN
@@ -443,6 +445,8 @@ def sr_FWHM(trace,d_arr,f_arr,pic_dim=256,diag=False):
 	dt - float - temporal spacing [s] to be used in FROG trace
 	df - float - spectral spacing [Hz] to be used in FROG trace
 	M - float - parameter used to determine spacing
+	d_max - float - delay value [s] where max(I(tau)) along line of omega = max(I(omega))
+	f_max - float - freq value [Hz] where max(I(omega)) along line of tau = max(I(tau))
 	'''
 	# assertions
 	assert(isinstance(trace,np.ndarray)), 'input: trace must be an array'
@@ -457,9 +461,11 @@ def sr_FWHM(trace,d_arr,f_arr,pic_dim=256,diag=False):
 	# create I(omega) and I(tau) arrays
 	t_curve = trace[:,f_max_ind]
 	f_curve = trace[t_max_ind,:]
+	d_max = d_arr[t_max_ind]
+	f_max = f_arr[f_max_ind]
 	if diag:
-		print('max along t_curve:',s2fs*d_arr[t_max_ind])
-		print('max along f_curve:',h2th*f_arr[f_max_ind])
+		print('max along t_curve:',s2fs*d_max)
+		print('max along f_curve:',h2th*f_max)
 	# find half max for both sides, using splines because itll be easier
 	t_spl = intp.InterpolatedUnivariateSpline(d_arr,(t_curve.astype(float)-(np.max(t_curve.astype(float))/2.)))
 	f_spl = intp.InterpolatedUnivariateSpline(f_arr,(f_curve.astype(float)-(np.max(f_curve.astype(float))/2.)))
@@ -492,7 +498,111 @@ def sr_FWHM(trace,d_arr,f_arr,pic_dim=256,diag=False):
 	df = 1./(pic_dim*dt)
 	if diag:
 		print('M = ',M,'dt = ',dt*s2fs,'df = ',df*h2th)
-	return (dt,df,M)
+	return (dt,df,M,d_max,f_max)
 
 # need to test both padding during sampling and padding during FROG
 # either way both will use sr_FWHM for now
+# for starters try a funct that will default to not allow padding but can be alter to allow it
+# this is super rough but it seems like just doing a linspace resampling will still be withing FSR limits (barely)
+# so well make that one too
+
+def auto_snc(trace,d_arr,f_arr,N,pad_trace=False,save=False,folder='./',fname='test'):
+	'''
+	auto sample + crop using sr_FWHM, as described in Trebinos book chap 10
+	it will return the new trace and its associated arrays, and save it if youd like
+	NOTE: b/c its calling sr_FWHM it will center both arrays on the max value, ie at pic_dim/2,pic_dim/2
+	NOTE: you SHOULD NOT modify the trace or its assoc arrays
+	NOTE: this is supposed to keep the delay sampling rate, dt, within the FSR but it is a v rough guess
+	NOTE: if you wish to see diag results from sr_FWHM, use it seperately
+	NOTE there are no checks to ensure that this sampling will capture the signal, use sr_FWHM
+	inputs:
+	trace - array, int, NxM - a trace array of FROG intensities, I(omega_i,tau_j)
+	NOTE: trace should already have its background removed
+	d_arr - array, float, Nx1 - array of delay points [s], of the associated trace
+	f_arr - array, float, Mx1 - array of freq points [Hz], of the associated trace
+	N - int - aka pic_dim, the dimensions of the new trace you would like, will be NxN
+	pad_trace - bool - default False, if your new arrays are out of bounds of the originals it will throw an error, otherwise it will fill the trace with 0 for the out of bounds values
+	save - bool - default False, whether or not the new trace/arrays will be saved
+	folder - str - default current directory, relative path to directory you would like the file saved to (str)
+	fname - str - extra words youd like in front of every saved file (str), ie 'first_stage'
+	NOTE: do NOT include any file suffix or underscores at the end, the program will handle that for you
+	outputs: if save=True will save 3 .txt files, one for the trace and each array
+	NOTE: encoding: utf-8, comma delimited, and trace file will be saved as ints
+	f_trace - array, int, NxM - new trace of FROG intensities
+	fd_arr - array, float, Nx1 - new array of delay points [s]
+	ff_arr - array, float, Mx1 - new array of freq points [Hz]
+	NOTE: f is just for final
+	'''
+	# assert
+	# call sr_FWHM
+	dt,df,_,d_max,f_max = sr_FWHM(trace,d_arr,f_arr,N) # dont need M or diag messages
+	# create arrays
+	f_trace = np.zeros((N,N),dtype=trace.dtype)
+	fd_arr = np.zeros(N)
+	ff_arr = np.zeros(N)
+	# center arr on max and fill on both sides
+	fd_arr[N//2] = d_max
+	ff_arr[N//2] = f_max
+	fd_arr[:N//2] = np.array([d_max-dt*(i+1) for i in range(N//2)])[::-1]
+	fd_arr[(N//2 + 1):] = np.array([d_max+dt*(i+1) for i in range(N//2 - 1)])
+	ff_arr[:N//2] = np.array([f_max-df*(i+1) for i in range(N//2)])[::-1]
+	ff_arr[(N//2 + 1):] = np.array([f_max+df*(i+1) for i in range(N//2 - 1)])
+	# pull an assert errror if not padding trace and new arrays are out of bounds
+	n2p = False # need to pad (n2p) if it becomes true will either pull an assert error or signal padding is gonna need to happen
+	# create indexing for padding or just set as 1st and last index of final arrays
+	if (fd_arr[0]<d_arr[0]):
+		n2p = True
+		ld = find_ind(fd_arr,d_arr[0])
+	else:
+		ld = 0
+	if (fd_arr[-1]>d_arr[-1]):
+		n2p = True
+		rd = find_ind(fd_arr,d_arr[-1])
+	else:
+		rd = len(fd_arr)
+	if (ff_arr[0]<f_arr[0]):
+		n2p = True
+		lf = find_ind(ff_arr,f_arr[0])
+	else:
+		lf = 0
+	if (ff_arr[-1]>f_arr[-1]):
+		n2p = True
+		rf = find_ind(ff_arr,f_arr[-1])
+	else:
+		rf = len(ff_arr)
+	if (pad_trace==False):
+		assert(not(n2p)), 'new arrays would be out of bounds from old arrays, turn on pad_trace or adjust N'
+	# use spline to fill trace values 
+	trc_spl = intp.RectBivariateSpline(d_arr,f_arr,trace)
+	# now to fill f_trace, need ind of where needs to be padded or not
+	# fill values then pad with zeros to overwrite
+	f_trace = trc_spl(fd_arr,ff_arr).astype(int) # arrays must be able to form a grid
+	# also for some reason it will output neg vals, so well put all neg val -> 0
+	f_trace[f_trace<0] = 0
+	# now deal w/ padding
+	f_trace[:ld,:] = 0
+	f_trace[rd:,:] = 0
+	f_trace[:,:lf] = 0
+	f_trace[:,rf:] = 0
+	# save if wanted
+	# will overwrite if name is the same
+	if save:
+		trc_name = folder+fname+'_processed_trace'
+		d_name = folder+fname+'_processed_delay'
+		f_name = folder+fname+'_processed_freq'
+		try:
+			with open(trc_name,'w',encoding='utf-8') as f:
+				np.savetxt(f,f_trace,fmt='%u',delimiter=',',encoding='utf-8')
+		except:
+			raise Exception('error saving trace file')
+		try:
+			with open(d_name,'w',encoding='utf-8') as f:
+				np.savetxt(f,fd_arr,delimiter=',',encoding='utf-8')
+		except:
+			raise Exception('error saving delay array file')
+		try:
+			with open(f_name,'w',encoding='utf-8') as f:
+				np.savetxt(f,ff_arr,delimiter=',',encoding='utf-8')
+		except:
+			raise Exception('error saving freq array file')
+	return (f_trace,fd_arr,ff_arr)

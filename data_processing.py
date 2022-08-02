@@ -16,7 +16,7 @@ mpl.rc('ytick.minor', visible=True)
 # constants
 c = 2.99e8 # speed of light in vac [m/s]
 # factors for plotting, b/c im working in m and sec
-h2th = 1.e-15 # Hz to THz
+h2th = 1.e-15 # Hz to PHz
 m2nm = 1.e9 # m to nm
 s2fs = 1.e15 # s to fs
 
@@ -138,7 +138,7 @@ def nice_plot(trace,d_arr,chose_d,f_arr,chose_f,save=False,fignum=1,title='title
 	figtitle = 'Fig {}: '.format(int(fignum)) + title
 	if ((np.isin(chose_d,d_arr))&(np.isin(chose_f,f_arr))): # if both are my life is easy
 		b_leg = '$\\tau$={d: .1f} fs'.format(d=(chose_d*s2fs)) # names are like that bc of fig labels
-		c_leg = '$\omega$={c:.3f} THz'.format(c=(chose_f*h2th))
+		c_leg = '$\omega$={c:.3f} PHz'.format(c=(chose_f*h2th))
 	elif (np.isin(chose_d,d_arr)):
 		b_leg = '$\\tau$={d: .1f} fs'.format(d=(chose_d*s2fs))
 		# bs
@@ -162,7 +162,7 @@ def nice_plot(trace,d_arr,chose_d,f_arr,chose_f,save=False,fignum=1,title='title
 	ax.pcolormesh(f_arr*h2th,d_arr*s2fs,trace,cmap='hot')
 	ax.axvline(chose_f*h2th,c='w',ls='--')
 	ax.axhline(chose_d*s2fs,c='w',ls='--')
-	ax.set_xlabel('Frequency [THz]')
+	ax.set_xlabel('Frequency [PHz]')
 	ax.set_ylabel('Delay [fs]')
 	ax.set_title('(A)',loc='left')
 	ax.set_title('$I_{FROG}(\omega_i,\\tau_j)$')
@@ -223,7 +223,7 @@ def rough_plot(trace,d_arr,f_arr,chose_d=False,chose_f=False,title='title'):
 		plt.axhline(chose_d*s2fs,c='w',ls='--');
 	elif (isinstance(chose_f,float))&(chose_d==False):
 		plt.axvline(chose_f*h2th,c='w',ls='--');
-	plt.xlabel('Frequency [THz]');
+	plt.xlabel('Frequency [PHz]');
 	plt.ylabel('Delay [fs]');
 	plt.title('Trace: '+title);
 	# set up all the string stuff and chosen freq/delay stuff
@@ -231,7 +231,7 @@ def rough_plot(trace,d_arr,f_arr,chose_d=False,chose_f=False,title='title'):
 	if (isinstance(chose_d,(float)))&(isinstance(chose_f,(float))):
 		if ((np.isin(chose_d,d_arr))&(np.isin(chose_f,f_arr))): # if both are my life is easy
 			b_leg = '$\\tau$={d: .1f} fs'.format(d=(chose_d*s2fs)) # names are like that bc of fig labels
-			c_leg = '$\omega$={c:.3f} THz'.format(c=(chose_f*h2th))
+			c_leg = '$\omega$={c:.3f} PHz'.format(c=(chose_f*h2th))
 		elif (np.isin(chose_d,d_arr)):
 			b_leg = '$\\tau$={d: .1f} fs'.format(d=(chose_d*s2fs))
 			# bs
@@ -246,7 +246,7 @@ def rough_plot(trace,d_arr,f_arr,chose_d=False,chose_f=False,title='title'):
 		# then plot
 		plt.figure();
 		plt.plot(f_arr*h2th,trace[np.isin(d_arr,chose_d),:],c='k');
-		plt.xlabel('Frequency [THz]');
+		plt.xlabel('Frequency [PHz]');
 		plt.ylabel('Intensity [cts]');
 		plt.title('I($\omega$) '+b_leg+title)
 		plt.figure();
@@ -268,7 +268,7 @@ def rough_plot(trace,d_arr,f_arr,chose_d=False,chose_f=False,title='title'):
 		plt.title('I($\omega$) '+b_leg+title)
 	elif (isinstance(chose_f,(float)))&(chose_d==False):
 		if (np.isin(chose_f,f_arr)):
-			c_leg = '$\omega$={c:.3f} THz'.format(c=(chose_f*h2th))
+			c_leg = '$\omega$={c:.3f} PHz'.format(c=(chose_f*h2th))
 		else:
 			# bs
 			raise Exception('this is currently not supported, please make chose_d a part of d_arr')

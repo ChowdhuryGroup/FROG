@@ -173,8 +173,7 @@ def nice_plot(trace,d_arr,chose_d,f_arr,chose_f,save=False,fignum=1,title='title
 		if (fname[-4:]!='.png'):
 			fname += '.png'
 		try:
-			with open(fname,'w') as f:
-				fig.savefig(f,dpi=300)
+			fig.savefig(fname,dpi=300)
 		except:
 			raise Exception('error saving picture')
 	plt.show();

@@ -1,6 +1,13 @@
+# files/folders to be ignored
 **/processed_data.tsv
 **/processed_data_delays.tsv
 **/processed_spectrum.tsv
+/First Stage/**
+/first_stage_output/**
+/Raw PHAROS/**
+/Raw_PHAROS_output/**
+/Second_Stage/**
+/second_stage_output
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

@@ -321,9 +321,11 @@ def avg_removal(trace,d_arr,f_arr,bnd_val,trace_type=np.ushort,copy=True):
 	filtered_trace - array, int, NxM - the filtered trace, can either be a copy of input trace or just modified
 	'''
 	# check inputs, all the basic ones are covered in get_med, so they wont be repeated here
-	assert(isinstance(trace[1,1],np.integer)), 'trace elements must be integers'
-	assert(isinstance(trace[1,1],trace_type)), 'dtype mismatch btwn trace elements and trace_type'
-	assert(np.issubdtype(trace_type,np.integer)), 'output trace must be integer'
+	# TESTING SOME STUFF (10/13/22) MAY NO LONGER WANT ONLY INT ARRAYS FOR THIS GUY
+	# assert(isinstance(trace[1,1],np.integer)), 'trace elements must be integers'
+	# assert(isinstance(trace[1,1],trace_type)), 'dtype mismatch btwn trace elements and trace_type'
+	# assert(np.issubdtype(trace_type,np.integer)), 'output trace must be integer'
+
 	assert(isinstance(copy,bool)), 'input: copy must be a bool'
 	avg = get_avg(trace,d_arr,f_arr,bnd_val)
 	# handle copying or not
@@ -506,6 +508,7 @@ def man_snc(trace,d_arr,mid_d,f_arr,mid_f,D,dt,df,pad_trace=False,save=False,fol
 	f_trace - array, int, DxD - new trace of FROG intensities
 	fd_arr - array, float, Dx1 - new array of delay points [s]
 	ff_arr - array, float, Dx1 - new array of freq points [Hz], this one will be in asc order
+	NOTE: want ff_arr centered on carrier freq, cuz then you can go from what the frog FTs spit out to actual freqs
 	NOTE: f is just for final
 	'''
 	# assertions
@@ -554,8 +557,9 @@ def man_snc(trace,d_arr,mid_d,f_arr,mid_f,D,dt,df,pad_trace=False,save=False,fol
 		rf = find_ind(ff_arr,f_arr.max())
 	else:
 		rf = len(ff_arr)
-	if (ff_arr[0]<0.):
-		raise Exception('cannot have negative freq values, fix mid_f, D, and/or df')
+	# i think i dont care if we have neg freq cuz thts how the FT do
+	#if (ff_arr[0]<0.):
+	#	raise Exception('cannot have negative freq values, fix mid_f, D, and/or df')
 	if (pad_trace==False):
 		assert(not(n2p)), 'new arrays would be out of bounds from old arrays, turn on pad_trace or adjust N'
 	# use spline to fill trace values 

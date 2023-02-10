@@ -118,7 +118,7 @@ def g_err(m_trace,c_trace):
 	mu = mu_factor(m_trace,c_trace)
 	# calc gk
 	# asssert that gk will stay real either before w/ stuff in sum or after w/ dtype check
-	gk = np.abs(np.sum((m_trace - mu*c_trace))/(N**2))
+	gk = np.sqrt(np.sum((m_trace - mu*c_trace)**2)/(N**2))
 	return gk
 
 
